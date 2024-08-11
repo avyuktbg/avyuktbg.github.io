@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theme Selector</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background-color: rgb(27, 27, 27); 
+            color: white; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            overflow: hidden; 
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .content {
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 18px; 
+        }
+
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; 
+            margin-bottom: 20px;
+        }
+
+        .option {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .circle {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid grey;
+            margin-right: 10px;
+        }
+
+        .circle.selected {
+            background-color: rgb(95, 125, 222);
+            border-color: rgb(95, 125, 222);
+        }
+
+        .option:hover .circle {
+            border-color: lightblue;
+        }
+
+        .submit-button {
+            background-color: rgb(255, 230, 0);
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            color: rgb(19, 19, 19); 
+        }
+
+        .submit-button:hover {
+            opacity: 0.8;
+        }
+
+        #mainEngine {
+            display: none; 
+        }
+
+        #renderCanvas {
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute;
+            top: 0;
+            left: 0;
+            border: none; 
+        }
+
+        #axes {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 100px;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        #axes div {
+            margin: 10px;
+        }
+
+        .axis {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+        }
+
+        .axis span {
+            margin: 0 5px;
+        }
+
+        .selected {
+            border: 2px solid rgb(95, 125, 222) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content" id="themeSelection">
+            <h1>What theme do you want?</h1>
+            <div class="options">
+                <div class="option" onclick="changeTheme('black', this)">
+                    <div class="circle blue"></div>
+                    Night
+                </div>
+                <div class="option" onclick="changeTheme('white', this)">
+                    <div class="circle"></div>
+                    White
+                </div>
+            </div>
+            <button class="submit-button" onclick="showMainEngine()">Continue</button>
+        </div>
+    </div>
+
+    <div id="mainEngine">
+        <canvas id="renderCanvas"></canvas>
+        <div id="axes">
+            <div class="axis">
+                <span>↑</span>
+                <span>Y</span>
+            </div>
+            <div class="axis">
+                <span>←</span>
+                <span>X</span>
+                <span>→</span>
+            </div>
+            <div class="axis">
+                <span>↓</span>
+                <span>Z</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function changeTheme(color, element) {
+            const body = document.body;
+            const circles = document.querySelectorAll('.circle');
+            const submitButton = document.querySelector('.submit-button');
+            
+            circles.forEach(circle => circle.classList.remove('selected'));
+            
+            element.querySelector('.circle').classList.add('selected');
+            
+            if (color === 'white') {
+                body.style.backgroundColor = 'white';
+                body.style.color = 'black';
+                submitButton.style.backgroundColor = 'black';
+                submitButton.style.color = 'white';
+            } else {
+                body.style.backgroundColor = 'rgb(27, 27, 27)';
+                body.style.color = 'white';
+                submitButton.style.backgroundColor = 'yellow';
+                submitButton.style.color = 'black';
+            }
+        }
+
+        function showMainEngine() {
+            document.getElementById('themeSelection').style.display = 'none';
+            document.getElementById('mainEngine').style.display = 'block';
+
+            const canvas = document.getElementById('renderCanvas');
+            const engine = new BABYLON.Engine(canvas, true);
+            const scene = new BABYLON.Scene(engine);
+
+            const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 5, -10), scene);
+            camera.setTarget(BABYLON.Vector3.Zero());
+            camera.attachControl(canvas, false);
+
+            const light = new BABYLON.PointLight("light", new BABYLON.Vector3(0, 10, -10), scene);
+            light.intensity = 0.7;
+
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, scene);
+            const box = BABYLON.MeshBuilder.CreateBox("box", { size: 2 }, scene);
+            box.position = new BABYLON.Vector3(0, 1, 0);
+
+            let selectedMesh = null;
+            let isRightMouseDown = false;
+            let moveForward = false;
+            let moveBackward = false;
+            let moveLeft = false;
+            let moveRight = false;
+            let isShiftDown = false;
+
+            let lastPointerX = 0;
+            let lastPointerY = 0;
+
+            let clickCount = 0;
+            let clickTimeout = null;
+
+            scene.onPointerObservable.add((pointerInfo) => {
+                if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+                    if (pointerInfo.event.button === 0) { 
+                        if (clickCount === 0) {
+                            clickTimeout = setTimeout(() => {
+                                clickCount = 0;
+                            }, 300); 
+                        }
+                        clickCount++;
+
+                        if (clickCount === 2) {
+                            if (pointerInfo.pickInfo.pickedMesh === box) {
+                                if (selectedMesh === box) {
+                                    selectedMesh = null;
+                                    box.outlineWidth = 0;
+                                } else {
+                                    selectedMesh = box;
+                                    box.outlineWidth = 2;
+                                    box.outlineColor = new BABYLON.Color3(0, 0, 1);
+                                }
+                            }
+                            clickCount = 0;
+                            clearTimeout(clickTimeout);
+                        }
+                    }
+                }
+            });
+
+            canvas.addEventListener('pointerdown', function(event) {
+                if (event.button === 2) { 
+                    isRightMouseDown = true;
+                    lastPointerX = event.clientX;
+                    lastPointerY = event.clientY;
+                }
+            });
+
+            canvas.addEventListener('pointerup', function(event) {
+                if (event.button === 2) { 
+                    isRightMouseDown = false;
+                }
+            });
+
+            canvas.addEventListener('pointermove', function(event) {
+                if (isRightMouseDown) {
+                    const deltaX = event.clientX - lastPointerX;
+                    const deltaY = event.clientY - lastPointerY;
+                    lastPointerX = event.clientX;
+                    lastPointerY = event.clientY;
+
+                    camera.rotation.y += deltaX * 0.002;
+                    camera.rotation.x -= deltaY * 0.002;
+                }
+
+                if (selectedMesh && isRightMouseDown) {
+                    const ray = scene.createPickingRay(event.clientX, event.clientY, BABYLON.Matrix.Identity(), camera);
+                    const pickInfo = scene.pickWithRay(ray);
+                    if (pickInfo.pickedPoint) {
+                        selectedMesh.position = pickInfo.pickedPoint;
+                    }
+                }
+            });
+
+            window.addEventListener('keydown', function(event) {
+                switch(event.key) {
+                    case 'w': moveForward = true; break;
+                    case 's': moveBackward = true; break;
+                    case 'a': moveLeft = true; break;
+                    case 'd': moveRight = true; break;
+                    case 'Shift': isShiftDown = true; break;
+                }
+            });
+
+            window.addEventListener('keyup', function(event) {
+                switch(event.key) {
+                    case 'w': moveForward = false; break;
+                    case 's': moveBackward = false; break;
+                    case 'a': moveLeft = false; break;
+                    case 'd': moveRight = false; break;
+                    case 'Shift': isShiftDown = false; break;
+                }
+            });
+
+            engine.runRenderLoop(() => {
+                const forward = camera.getDirection(BABYLON.Vector3.Forward());
+                const right = camera.getDirection(BABYLON.Vector3.Right());
+                const moveSpeed = isShiftDown ? 0.3 : 0.1;
+
+                if (moveForward) {
+                    camera.position.addInPlace(forward.scale(moveSpeed));
+                }
+                if (moveBackward) {
+                    camera.position.addInPlace(forward.scale(-moveSpeed));
+                }
+                if (moveLeft) {
+                    camera.position.addInPlace(right.scale(-moveSpeed));
+                }
+                if (moveRight) {
+                    camera.position.addInPlace(right.scale(moveSpeed));
+                }
+
+                scene.render();
+            });
+
+            window.addEventListener('resize', () => {
+                engine.resize();
+            });
+
+            canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/babylonjs@5.0.0/babylon.max.js"></script>
+</body>
+</html>
